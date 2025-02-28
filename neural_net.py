@@ -23,6 +23,11 @@ df['target'] = df['casual'] + df['registered']
 df['epoch'] = pd.to_datetime(df['dteday'], dayfirst=False).apply(lambda x: int(x.timestamp()))
 
 #%%
+# df['covid'] = (df['dteday'].dt.year.isin([2020, 2021])).astype(int)
+
+df['commuting_hours'] = df['dteday'].dt.hour.isin([7, 8, 16, 17]).astype(int)
+
+#%%
 def is_holiday(date):
     """Check if a given date is a US holiday from the provided list."""
     year = date.year
@@ -88,17 +93,6 @@ df = update_holiday_column(df)
 scaler = MinMaxScaler()
 num_features = ['hr', 'temp_c', 'feels_like_c', 'hum', 'windspeed', 'epoch']
 df[num_features] = scaler.fit_transform(df[num_features])
-
-# %%
-# Prepare data for 'casual' prediction
-df_casual = df.drop(columns=['registered', 'dteday'])
-X = df_casual.drop('casual', axis=1)
-y = df_casual['casual']
-
-#%%
-# df_registered = df.drop(columns=['casual', 'dteday'])
-# X = df_casual.drop('casual', axis=1)
-# y = df_casual['casual']
 
 #%%
 df_target = df.drop(columns=['registered', 'casual', 'dteday'])
@@ -273,6 +267,10 @@ holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/
 # Ensure 'dteday' column exists in the holdout data and process the 'epoch' column
 holdout['dteday'] = pd.to_datetime(holdout['dteday'])
 holdout['epoch'] = pd.to_datetime(holdout['dteday'], dayfirst=False).apply(lambda x: int(x.timestamp()))
+
+holdout['covid'] = (holdout['dteday'].dt.year.isin([2020, 2021])).astype(int)
+
+holdout['commuting_hours'] = holdout['dteday'].dt.hour.isin([7, 8, 16, 17]).astype(int)
 
 # Apply the holiday check function
 holdout = update_holiday_column(holdout)
