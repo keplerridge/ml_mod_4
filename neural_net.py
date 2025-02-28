@@ -23,7 +23,7 @@ df['target'] = df['casual'] + df['registered']
 df['epoch'] = pd.to_datetime(df['dteday'], dayfirst=False).apply(lambda x: int(x.timestamp()))
 
 #%%
-# df['covid'] = (df['dteday'].dt.year.isin([2020, 2021])).astype(int)
+df['covid'] = (df['dteday'].dt.year.isin([2020, 2021])).astype(int)
 
 df['commuting_hours'] = df['dteday'].dt.hour.isin([7, 8, 16, 17]).astype(int)
 
@@ -78,16 +78,37 @@ def is_holiday(date):
     # December 26 (if it's a Friday)
     if month == 12 and day == 26 and weekday == 4:  # Friday
         return 1
-    
-    return 0
 
 def update_holiday_column(df):
     """Update the 'holiday' column in the dataframe based on US holidays."""
     df['holiday'] = df['dteday'].apply(is_holiday)
     return df
 
+def add_holiday_shadow(df):
+    """Create a new column 'holiday_shadow' marking dates within a week of a holiday."""
+    
+    # Convert 'dteday' to datetime if not already
+    df['dteday'] = pd.to_datetime(df['dteday'])
+    
+    # Get unique dates
+    unique_dates = df['dteday'].unique()
+    
+    # Find all holiday dates
+    holiday_dates = set(date for date in unique_dates if is_holiday(date))
+    
+    # Create a new column initialized with 0
+    df['holiday_shadow'] = 0
+    
+    # Check if each date is within 7 days of a holiday
+    for date in unique_dates:
+        if any(abs((date - holiday).days) <= 7 for holiday in holiday_dates):
+            df.loc[df['dteday'] == date, 'holiday_shadow'] = 1
+            
+    return df
+
 #%%
 df = update_holiday_column(df)
+df = add_holiday_shadow(df)
 
 #%%
 scaler = MinMaxScaler()
@@ -118,28 +139,30 @@ y_test = y_test.to_numpy()
 
 #%%
 # Define the model
-model = Sequential([
-        Dense(32, activation='relu', input_shape=(X_train.shape[1],)),
-        Dense(16, activation='relu'),
-        Dropout(0.2),
-        Dense(32, activation='relu'),
-        Dropout(0.2),
-        Dense(1)  # Output layer (no activation for regression)
-    ])
+with tf.device('/GPU:0'):
+    model = Sequential([
+            Dense(32, activation='relu', input_shape=(X_train.shape[1],)),
+            Dense(16, activation='relu'),
+            Dropout(0.2),
+            Dense(32, activation='relu'),
+            Dropout(0.2),
+            Dense(1)  # Output layer (no activation for regression)
+        ])
 
-# Compile the model
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-              loss='mse',  # Mean Squared Error for regression
-              metrics=['mae'])  # Mean Absolute Error for better interpretability
+    # Compile the model
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+                loss='mse',  # Mean Squared Error for regression
+                metrics=['mae'])  # Mean Absolute Error for better interpretability
 
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
 
 #%%
 # Train the model
-model.fit(X_train, y_train, epochs=100, batch_size=32, 
-        validation_data=(X_test, y_test), verbose=2, 
-        callbacks=[tensorboard_callback])
+with tf.device('/GPU:0'):
+    model.fit(X_train, y_train, epochs=100, batch_size=256, 
+            validation_data=(X_test, y_test), verbose=2, 
+            callbacks=[tensorboard_callback])
 
 #%%
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -170,15 +193,23 @@ print(f'R^2: {r2:.4f}')
 # #%%
 # # Define the model-building function for Keras Tuner
 # def build_model(hp):
-#     model = Sequential([
-#         Dense(hp.Choice('units_1', [32, 64, 128]), activation='relu', input_shape=(X_train.shape[1],)),
-#         Dense(hp.Choice('units_2', [16, 32, 64]), activation='relu'),
-#         Dropout(hp.Choice('dropout_1', [0.2, 0.5])),
-#         Dense(hp.Choice('units_3', [32, 64, 128]), activation='relu'),
-#         Dropout(hp.Choice('dropout_2', [0.2, 0.5])),
-#         Dense(1)  # Output layer (no activation for regression)
-#     ])
+#     # Initialize the model
+#     model = Sequential()
     
+#     # Input layer (first layer) 
+#     model.add(Dense(hp.Choice('units_1', [32, 64, 128, 256]), activation='relu', input_shape=(X_train.shape[1],)))
+    
+#     # Dynamically add layers based on the number of layers hyperparameter
+#     num_layers = hp.Int('num_layers', min_value=2, max_value=5, step=1)  # You can test between 2 to 5 layers
+
+#     for i in range(2, num_layers + 1):
+#         model.add(Dense(hp.Choice(f'units_{i}', [32, 64, 128, 256]), activation='relu'))
+#         model.add(Dropout(hp.Choice(f'dropout_{i}', [0.2, 0.3, 0.5])))  # Dynamically adding dropout after each layer
+    
+#     # Output layer (no activation for regression)
+#     model.add(Dense(1))  
+    
+#     # Compile the model
 #     model.compile(optimizer=keras.optimizers.Adam(
 #                     learning_rate=hp.Choice('learning_rate', [0.001, 0.0001, 0.01])),
 #                   loss='mse',
@@ -196,7 +227,7 @@ print(f'R^2: {r2:.4f}')
 # )
 
 # # Perform the search
-# tuner.search(X_train, y_train, epochs=50, batch_size=32,
+# tuner.search(X_train, y_train, epochs=50, batch_size=128,  # Larger batch size for GPU usage
 #              validation_data=(X_test, y_test), verbose=2)
 
 # # Get the best hyperparameters
@@ -206,8 +237,9 @@ print(f'R^2: {r2:.4f}')
 # # Build the model with best hyperparameters
 # best_model = tuner.hypermodel.build(best_hps)
 
+# #%%
 # # Train the best model
-# best_model.fit(X_train, y_train, epochs=100, batch_size=32, 
+# best_model.fit(X_train, y_train, epochs=100, batch_size=128,  # Larger batch size for GPU usage
 #                validation_data=(X_test, y_test), verbose=2)
 
 
@@ -274,6 +306,7 @@ holdout['commuting_hours'] = holdout['dteday'].dt.hour.isin([7, 8, 16, 17]).asty
 
 # Apply the holiday check function
 holdout = update_holiday_column(holdout)
+holdout = add_holiday_shadow(holdout)
 
 # Apply the same scaling to the numeric columns
 holdout[num_features] = scaler.transform(holdout[num_features])
