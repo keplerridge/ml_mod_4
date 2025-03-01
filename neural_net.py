@@ -140,17 +140,23 @@ y_test = y_test.to_numpy()
 #%%
 # Define the model
 with tf.device('/GPU:0'):
+    # model = Sequential([
+    #         Dense(32, activation='relu', input_shape=(X_train.shape[1],)),
+    #         Dense(16, activation='relu'),
+    #         Dropout(0.2),
+    #         Dense(32, activation='relu'),
+    #         Dropout(0.2),
+    #         Dense(1)  # Output layer (no activation for regression)
+    #     ])
     model = Sequential([
-            Dense(32, activation='relu', input_shape=(X_train.shape[1],)),
-            Dense(16, activation='relu'),
-            Dropout(0.2),
-            Dense(32, activation='relu'),
-            Dropout(0.2),
-            Dense(1)  # Output layer (no activation for regression)
-        ])
+        Dense(32, activation='relu', input_shape=(X_train.shape[1],)),  # First layer
+        Dense(256, activation='relu'),  # Second layer with 256 units
+        Dropout(0.2),  # Dropout after second layer
+        Dense(1)  # Output layer (assuming regression task)
+    ])
 
     # Compile the model
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01),
                 loss='mse',  # Mean Squared Error for regression
                 metrics=['mae'])  # Mean Absolute Error for better interpretability
 
@@ -190,28 +196,28 @@ print(f'R^2: {r2:.4f}')
 
 
 
-# #%%
+#%%
 # # Define the model-building function for Keras Tuner
 # def build_model(hp):
 #     # Initialize the model
 #     model = Sequential()
     
 #     # Input layer (first layer) 
-#     model.add(Dense(hp.Choice('units_1', [32, 64, 128, 256]), activation='relu', input_shape=(X_train.shape[1],)))
+#     model.add(Dense(hp.Choice('units_1', [32, 64, 128, 256, 512, 1024]), activation='relu', input_shape=(X_train.shape[1],)))
     
 #     # Dynamically add layers based on the number of layers hyperparameter
-#     num_layers = hp.Int('num_layers', min_value=2, max_value=5, step=1)  # You can test between 2 to 5 layers
+#     num_layers = hp.Int('num_layers', min_value=2, max_value=6, step=1)  # You can test between 2 to 6 layers now
 
 #     for i in range(2, num_layers + 1):
-#         model.add(Dense(hp.Choice(f'units_{i}', [32, 64, 128, 256]), activation='relu'))
-#         model.add(Dropout(hp.Choice(f'dropout_{i}', [0.2, 0.3, 0.5])))  # Dynamically adding dropout after each layer
+#         model.add(Dense(hp.Choice(f'units_{i}', [32, 64, 128, 256, 512, 1024]), activation='relu'))
+#         model.add(Dropout(hp.Choice(f'dropout_{i}', [0.2, 0.3, 0.4, 0.5, 0.6])))  # More dropout options
     
 #     # Output layer (no activation for regression)
 #     model.add(Dense(1))  
     
 #     # Compile the model
 #     model.compile(optimizer=keras.optimizers.Adam(
-#                     learning_rate=hp.Choice('learning_rate', [0.001, 0.0001, 0.01])),
+#                     learning_rate=hp.Choice('learning_rate', [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1])),
 #                   loss='mse',
 #                   metrics=['mae'])
 #     return model
@@ -220,7 +226,7 @@ print(f'R^2: {r2:.4f}')
 # tuner = kt.GridSearch(
 #     build_model,
 #     objective='val_mae',  # Minimize validation MAE
-#     max_trials=10,  # Number of different hyperparameter combinations to try
+#     max_trials=100,  # Increased trials to try 10x more combinations
 #     executions_per_trial=2,  # Train each configuration multiple times to reduce variance
 #     directory='kt_logs',
 #     project_name='grid_search'
@@ -237,13 +243,13 @@ print(f'R^2: {r2:.4f}')
 # # Build the model with best hyperparameters
 # best_model = tuner.hypermodel.build(best_hps)
 
-# #%%
+
 # # Train the best model
 # best_model.fit(X_train, y_train, epochs=100, batch_size=128,  # Larger batch size for GPU usage
 #                validation_data=(X_test, y_test), verbose=2)
 
 
-# #%%
+
 # from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 # import numpy as np
 
@@ -294,8 +300,8 @@ print(f'R^2: {r2:.4f}')
 
 
 # %%
-holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/biking_holdout_test_mini.csv')
-
+# holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/biking_holdout_test_mini.csv')
+holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/bikes_december.csv')
 # Ensure 'dteday' column exists in the holdout data and process the 'epoch' column
 holdout['dteday'] = pd.to_datetime(holdout['dteday'])
 holdout['epoch'] = pd.to_datetime(holdout['dteday'], dayfirst=False).apply(lambda x: int(x.timestamp()))
