@@ -300,8 +300,8 @@ print(f'R^2: {r2:.4f}')
 
 
 # %%
-# holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/biking_holdout_test_mini.csv')
-holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/bikes_december.csv')
+holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/biking_holdout_test_mini.csv')
+# holdout = pd.read_csv('https://raw.githubusercontent.com/byui-cse/cse450-course/master/data/bikes_december.csv')
 # Ensure 'dteday' column exists in the holdout data and process the 'epoch' column
 holdout['dteday'] = pd.to_datetime(holdout['dteday'])
 holdout['epoch'] = pd.to_datetime(holdout['dteday'], dayfirst=False).apply(lambda x: int(x.timestamp()))
@@ -345,5 +345,5 @@ holdout_predictions = model.predict(holdout)
 save_df = pd.DataFrame(holdout_predictions, columns=['predictions'])
 
 # %%
-save_df.to_csv('./team6-module4-predictions.csv', index=False)
+save_df.to_csv('./team61-module4-predictions.csv', index=False)
 # %%
